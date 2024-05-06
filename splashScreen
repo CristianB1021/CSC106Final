@@ -1,1 +1,141 @@
+var currentScene = 0; // 0 = Start Screen, 1 = Game Screen, 2 = End Screen
 
+var bitmoji = function(x, y, h) {
+    var p = h/100;
+    fill(235, 171, 127);
+    ellipse(x+78*p,y+94*p,77*p,100*p); // face
+    fill(143, 79, 79);
+    ellipse(x+60*p,y+80*p,15*p,15*p); // left eye
+    ellipse(x+92*p,y+79*p,15*p,15*p); // right eye
+    fill(255, 255, 255); // mouth
+    arc(x+78*p,y+118*p,44*p,11*p,-86,274);
+    fill(23, 21, 21); // chest
+    quad(x+136*p,y+134*p,x+128*p,y+134*p,x+20*p,y+134*p,x+76*p,y+198*p);
+    fill(0, 0, 0); // chain
+    stroke(230, 255, 0);
+    arc(x+78*p,y+136*p,55*p,80*p,2,179);
+    fill(28, 25, 25); // hat
+    arc(x+77*p,y+58*p,83*p,-56*p,0,178);
+    stroke(23, 21, 21); // nose
+    fill(235, 171, 127);
+    bezier(x+80*p, y+94*p, x+95*p, y+103*p, x+83*p, y+110*p, x+74*p, y+106*p);
+   
+
+};
+
+var drawBitmojiHead = function(x,y,reSize){
+
+var r = reSize/100;    
+
+noStroke();
+fill(242, 187, 150); //skin color
+ellipse(x,y,75*r,100*r); //head
+
+
+fill(87, 24, 24);
+quad(x-49*r,y-8*r,x-33*r,y-41*r,x-3*r,y-50*r,x-30*r,y-11*r); //left hair
+quad(x+47*r,y-10*r,x+41*r,y-29*r,x+03*r,y-50*r,x+25*r,y-14*r); //right hair
+rect(x-33*r,y-51*r,61*r,16*r); // middle hair
+rect(x-17*r,y-10*r,11*r,3*r);
+rect(x+05*r,y-10*r,11*r,3*r);//eyebrows
+rect(x-14*r,y+21*r,32*r,3*r);//mustache
+
+fill(128, 46, 19);
+ellipse(x-10*r,y,9*r,12*r); // left eye
+ellipse(x+10*r,y,9*r,12*r); // right eye
+
+stroke(0, 0, 0);
+fill(242, 187, 150); //skin color
+bezier(x,y-3,x+25*r,y+28*r,x-15*r,y+20*r,x-3*r,y+11*r); //nose
+
+fill(255,255,255); //white fill for teeth
+arc(x+02*r,y+28*r,23*r,27*r,1,180); //mouth
+line(x+9*r,y+29*r,x+15*r,y+28*r);
+};
+
+var drawBitmojiBody = function(x,y,reSize){
+
+var r = reSize/100;
+
+fill(175, 85, 189);
+rect(x-37*r,y+48*r,71*r,81*r);//torso
+
+arc(x-10*r,y+82*r,23*r,26*r,89,271);//Letter C
+
+line(x+01*r,y+95*r,x+01*r,y+66*r);
+arc(x+04*r,y+89*r,13*r,14*r,243,478);
+arc(x+04*r,y+75*r,13*r,15*r,264,457); //Letter B
+};
+
+var drawBitmoji = function(x,y,reSize){
+    drawBitmojiHead(x,y,reSize);
+    drawBitmojiBody(x,y,reSize);
+};
+
+var Button = function(config) {
+    this.x = config.x || 0;
+    this.y = config.y || 0;
+    this.width = config.width || 150;
+    this.height = config.height || 50;
+    this.label = config.label || "Click";
+    this.onClick = config.onClick || function() {};
+};
+
+Button.prototype.draw = function() {
+    fill(0, 234, 255);
+    rect(this.x, this.y, this.width, this.height, 5);
+    fill(0, 0, 0);
+    textSize(19);
+    textAlign(LEFT, TOP);
+    text(this.label, this.x+10, this.y+this.height/4);
+};
+
+Button.prototype.isMouseInside = function() {
+    return mouseX > this.x &&
+           mouseX < (this.x + this.width) &&
+           mouseY > this.y &&
+           mouseY < (this.y + this.height);
+};
+
+Button.prototype.handleMouseClick = function() {
+    if (this.isMouseInside()) {
+        this.onClick();
+    }
+};
+
+var but1 = new Button({
+    x: 141,
+    y: 300,
+    width: 120,
+    label: "Start Game",
+    onClick: function(){
+        currentScene = 1;
+    }
+});
+
+var startScreen = function(){
+    currentScene = 0;
+    
+    background(82, 212, 136);
+    
+    drawBitmoji(72, 222, 100);
+    bitmoji(262, 162, 94);
+    
+    fill(0, 0, 0);
+    textSize(91);
+    text("2048", 104, 10);
+    textSize(15);
+    text("Keep merging the numbers to get the highest number possible !", 19, 107, 240, 107);
+    text("Cristian Bonilla", 21, 360);
+    text("David Soriano", 289, 360);
+    textAlign(CENTER, CENTER);
+    
+    but1.draw();
+};
+
+mouseClicked = function(){
+    if (currentScene === 0){
+        but1.handleMouseClick();
+        gameScene();
+    }
+};
