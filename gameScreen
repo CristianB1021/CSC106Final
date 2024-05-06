@@ -1,1 +1,640 @@
+var score = 0,
+    moves = 0,
 
+    // If you have won
+    won = false,
+    next = false,
+
+    // If you lost
+    lost = false,
+
+    // The amount of squares per row
+    sz = 4,
+
+    // The time of an animation (fps)
+    animTime = 8,
+
+    // The time of a move animation (fps)
+    moveTime = 7,
+
+    // The animation timer
+    animTimer = 0,
+
+    // The colors of the tiles
+    colors = [
+        color(216, 202, 230), // 2
+        color(250, 206, 135), // 4
+        color(184, 68, 68), // 8
+        color(20, 173, 255), // 16
+        color(252, 210, 0), // 32
+        color(250, 68, 156), // 64
+        color(250, 239, 208), // 128
+        color(140, 82, 227), // 256
+        color(255, 112, 46), // 512
+        color(237, 197, 63), // 1024
+        color(136, 255, 0) // 2048
+    ],
+
+    // The colors of the text on the tiles
+    txtColors = [
+        color(255, 255, 255),
+    ],
+
+    // Stores the tiles
+    tiles = [],
+
+    // Makes key interaction easier
+    keys = [],
+    keyPressed = function () {
+        keys[keyCode] = true;
+        if (keyCode === 76) {
+            animTimer = 0;
+        }
+    },
+
+    // Each tile
+    Tile = function (x, y, num, startAnim, joinAnim, px, py) {
+        this.s = 0;
+        this.m = 0;
+        this.canMerge = true;
+        this.moveCount = 0;
+
+        this.x = x;
+        this.y = y;
+        this.sz = (446 / sz) - 15;
+
+        px = px === 0 ? px : px || x;
+        py = py === 0 ? py : py || y;
+
+        this.pX = px !== null ? px : x;
+        this.pY = py !== null ? py : y;
+        this.pSz = this.sz;
+
+        if (startAnim) {
+            this.pX = x + this.sz / (400 / sz) / 2.5;
+            this.pY = y + this.sz / (400 / sz) / 2.5;
+            this.pSz = this.sz / 5;
+        }
+
+        this.joinAnim = joinAnim;
+        this.join = false;
+
+        this.nX = x;
+        this.nY = y;
+        this.nSz = this.sz;
+
+        this.num = joinAnim ? num - 1 : num;
+    };
+    
+Tile.prototype.draw = function () {
+    if (animTimer <= moveTime) {
+        if (this.m < 0.9) {
+            this.m += 1 / moveTime;
+        } else if (this.joinAnim) {
+            this.num++;
+            this.pX = this.x + this.sz / (400 / sz) - this.sz / (400 / sz) * 1.1;
+            this.pY = this.y + this.sz / (400 / sz) - this.sz / (400 / sz) * 1.1;
+            this.pSz = this.sz * 1.2;
+            this.joinAnim = false;
+            this.join = true;
+        }
+    } else if (animTimer >= moveTime) {
+        if (this.s < 0.9) {
+            this.s += 1 / animTime;
+        }
+    }
+
+    if (this.join) {
+        this.s = constrain(this.s, 0, 1);
+        this.sz = lerp(this.pSz, this.nSz, this.s);
+        this.x = lerp(this.pX, this.nX, this.s);
+        this.y = lerp(this.pY, this.nY, this.s);
+    } else {
+        this.m = constrain(this.m, 0, 1);
+        this.sz = lerp(this.pSz, this.nSz, this.m);
+        this.x = lerp(this.pX, this.nX, this.m);
+        this.y = lerp(this.pY, this.nY, this.m);
+    }
+
+    strokeWeight(1);
+    if (this.num > 5 && this.num < colors.length) {
+        noStroke();
+        for (var i = -this.num * 3; i < this.num * 3; i++) {
+            fill(lerpColor(color(237, 206, 113), colors[this.num], 0.4), 8 - i / 4);
+            ellipse(this.x * (400 / sz) - i / 2 + this.sz / 2, this.y * (400 / sz) - i / 2 + this.sz / 2, this.sz + i, this.sz + i);
+        }
+        stroke(255, 75);
+    } else {
+        noStroke();
+    }
+
+    fill(colors[this.num] || color(61, 58, 51));
+    if (this.joinAnim) {
+        ellipse(this.nX * (400 / sz) + this.nSz / 2, this.nY * (400 / sz) + this.nSz / 2, this.nSz, this.nSz);
+    }
+    ellipse(this.x * (400 / sz) + this.sz / 2, this.y * (400 / sz) + this.sz / 2, this.sz, this.sz);
+
+    fill(txtColors[this.num]);
+    textSize(this.num < 6 ? this.sz / 2 : this.num < 9 ? this.sz / 2.5 : this.num < 13 ? this.sz / 3 : this.sz / 3.5);
+    if (this.joinAnim) {
+        text(pow(2, this.num + 1), this.nX * (400 / sz) + this.nSz / 2, this.nY * (400 / sz) + this.nSz / 2);
+    }
+    text(pow(2, this.num + 1), this.x * (400 / sz) + this.sz / 2, this.y * (400 / sz) + this.sz / 2);
+    noStroke();
+};
+
+
+// loads the "grid"
+for (var i = 0; i < sz; i ++) {
+    var k = [];
+    for (var j = 0; j < sz; j ++) {
+        k.push(' ');
+    }
+    tiles.push(k);
+}
+
+
+// Add a new random tile
+var newRandTile = function() {
+    var cells = [];
+    for (var y = 0; y < tiles.length; y ++) {
+        for (var x = 0; x < tiles[y].length; x ++) {
+            if (tiles[y][x] === ' ') {
+                cells.push({x: x, y: y});
+            }
+        }
+    }
+    var cell = cells[floor(random(0, cells.length))];
+    var y = cell.y;
+    var x = cell.x;
+    var num = random() > 0.9 ? 1 : 0;
+    tiles[y][x] = new Tile(x, y, num, true);
+};
+
+
+// User
+var updateTiles = function() {
+    var n = false;
+    var newTiles = [];
+
+    // Moves tiles
+    if (keys[UP]) {
+        for (var i = 0; i < sz; i ++) {
+            for (var y = 0; y < tiles.length-3; y ++) {
+                for (var x = 0; x < tiles[y].length; x ++) {
+                    if (tiles[y][x] === ' ' && tiles[y+1][x] === ' ' && tiles[y+2][x] === ' ' && typeof tiles[y+3][x] === 'object') {
+                        n = true;
+                        tiles[y][x] = new Tile(x, y, tiles[y+3][x].num, false, false, x, y+3);
+                        tiles[y+3][x] = ' ';
+                    }
+
+                    if (tiles[y][x].num === tiles[y+3][x].num && tiles[y+1][x] === ' ' && tiles[y+2][x] === ' ' && tiles[y][x].y !== tiles[y+3][x].y && tiles[y][x].canMerge && tiles[y+3][x].canMerge) {
+                        n = true;
+                        tiles[y][x] = new Tile(x, y, tiles[y+3][x].num);
+                        tiles[y][x].canMerge = false;
+                        tiles[y+3][x] = ' ';
+                        newTiles.push({
+                            x: x,
+                            y: y,
+                            num: tiles[y][x].num+1,
+                            px: x,
+                            py: y+3
+                        });
+                    }
+                }
+            }
+            for (var y = 0; y < tiles.length-2; y ++) {
+                for (var x = 0; x < tiles[y].length; x ++) {
+                    if (tiles[y][x] === ' ' && tiles[y+1][x] === ' ' && typeof tiles[y+2][x] === 'object') {
+                        n = true;
+                        tiles[y][x] = new Tile(x, y, tiles[y+2][x].num, false, false, x, y+2);
+                        tiles[y+2][x] = ' ';
+                    }
+
+                    if (tiles[y][x].num === tiles[y+2][x].num && tiles[y+1][x] === ' ' && tiles[y][x].y !== tiles[y+2][x].y && tiles[y][x].canMerge && tiles[y+2][x].canMerge) {
+                        n = true;
+                        tiles[y][x] = new Tile(x, y, tiles[y+2][x].num);
+                        tiles[y][x].canMerge = false;
+                        tiles[y+2][x] = ' ';
+                        newTiles.push({
+                            x: x,
+                            y: y,
+                            num: tiles[y][x].num+1,
+                            px: x,
+                            py: y+2
+                        });
+                    }
+                }
+            }
+            for (var y = 0; y < tiles.length-1; y ++) {
+                for (var x = 0; x < tiles[y].length; x ++) {
+                    if (tiles[y][x] === ' ') {
+                        if (tiles[y+1][x] !== undefined && typeof tiles[y+1][x] === 'object') {
+                            n = true;
+                            tiles[y][x] = new Tile(x, y, tiles[y+1][x].num, false, false, x, y+1);
+                            tiles[y+1][x] = ' ';
+                        }
+                        for (var j = 0; j < newTiles.length; j ++) {
+                            if (x === newTiles[j].x && y+1 === newTiles[j].y) {
+                                n = true;
+                                newTiles[j].y = y;
+                            }
+                        }
+                    }
+
+                    if (tiles[y][x].num === tiles[y+1][x].num && tiles[y][x].y !== tiles[y+1][x].y && tiles[y][x].canMerge && tiles[y+1][x].canMerge) {
+                        n = true;
+                        tiles[y][x] = new Tile(x, y, tiles[y+1][x].num);
+                        tiles[y][x].canMerge = false;
+                        tiles[y+1][x] = ' ';
+                        newTiles.push({
+                            x: x,
+                            y: y,
+                            num: tiles[y][x].num+1,
+                            px: x,
+                            py: y+1
+                        });
+                    }
+                }
+            }
+        }
+    }
+    if (keys[DOWN]) {
+        for (var i = 0; i < sz; i ++) {
+            for (var y = 3; y < tiles.length; y ++) {
+                for (var x = 0; x < tiles[y].length; x ++) {
+                    if (tiles[y][x] === ' ' && tiles[y-1][x] === ' ' && tiles[y-2][x] === ' ' && typeof tiles[y-3][x] === 'object') {
+                        n = true;
+                        tiles[y][x] = new Tile(x, y, tiles[y-3][x].num, false, false, x, y-3);
+                        tiles[y-3][x] = ' ';
+                    }
+                }
+            }
+            for (var y = tiles.length-1; y > 2; y --) {
+                for (var x = 0; x < tiles[y].length; x ++) {
+                    if (tiles[y][x].num === tiles[y-3][x].num && tiles[y-1][x] === ' ' && tiles[y-2][x] === ' ' && tiles[y][x].y !== tiles[y-3][x].y && tiles[y][x].canMerge && tiles[y-3][x].canMerge) {
+                        n = true;
+                        tiles[y][x] = new Tile(x, y, tiles[y-3][x].num);
+                        tiles[y][x].canMerge = false;
+                        tiles[y-3][x] = ' ';
+                        newTiles.push({
+                            x: x,
+                            y: y,
+                            num: tiles[y][x].num+1,
+                            px: x,
+                            py: y-3
+                        });
+                    }
+                }
+            }
+            for (var y = 2; y < tiles.length; y ++) {
+                for (var x = 0; x < tiles[y].length; x ++) {
+                    if (tiles[y][x] === ' ' && tiles[y-2][x] === ' ' && typeof tiles[y-2][x] === 'object') {
+                        n = true;
+                        tiles[y][x] = new Tile(x, y, tiles[y-2][x].num, false, false, x, y-2);
+                        tiles[y-2][x] = ' ';
+                    }
+                }
+            }
+            for (var y = tiles.length-1; y > 1; y --) {
+                for (var x = 0; x < tiles[y].length; x ++) {
+                    if (tiles[y][x].num === tiles[y-1][x].num && tiles[y-1][x] === ' ' && tiles[y][x].y !== tiles[y-2][x].y && tiles[y][x].canMerge && tiles[y-2][x].canMerge) {
+                        n = true;
+                        tiles[y][x] = new Tile(x, y, tiles[y-2][x].num);
+                        tiles[y][x].canMerge = false;
+                        tiles[y-2][x] = ' ';
+                        newTiles.push({
+                            x: x,
+                            y: y,
+                            num: tiles[y][x].num+1,
+                            px: x,
+                            py: y-2
+                        });
+                    }
+                }
+            }
+            for (var y = 1; y < tiles.length; y ++) {
+                for (var x = 0; x < tiles[y].length; x ++) {
+                    if (tiles[y][x] === ' ') {
+                        if (typeof tiles[y-1][x] === 'object') {
+                            n = true;
+                            tiles[y][x] = new Tile(x, y, tiles[y-1][x].num, false, false, x, y-1);
+                            tiles[y-1][x] = ' ';
+                        }
+                        for (var j = 0; j < newTiles.length; j ++) {
+                            if (x === newTiles[j].x && y-1 === newTiles[j].y) {
+                                n = true;
+                                newTiles[j].y = y;
+                            }
+                        }
+                    }
+                }
+            }
+            for (var y = tiles.length-1; y > 0; y --) {
+                for (var x = 0; x < tiles[y].length; x ++) {
+                    if (tiles[y][x].num === tiles[y-1][x].num && tiles[y][x].y !== tiles[y-1][x].y && tiles[y][x].canMerge && tiles[y-1][x].canMerge) {
+                        n = true;
+                        tiles[y][x] = new Tile(x, y, tiles[y-1][x].num);
+                        tiles[y][x].canMerge = false;
+                        tiles[y-1][x] = ' ';
+                        newTiles.push({
+                            x: x,
+                            y: y,
+                            num: tiles[y][x].num+1,
+                            px: x,
+                            py: y-1
+                        });
+                    }
+                }
+            }
+        }
+    }
+    if (keys[LEFT]) {
+        for (var i = 0; i < sz; i ++) {
+            for (var y = 0; y < tiles.length; y ++) {
+                for (var x = 0; x < tiles[y].length-3; x ++) {
+                    if (tiles[y][x] === ' ' && tiles[y][x+1] === ' ' && tiles[y][x+2] === ' ' && typeof tiles[y][x+3] === 'object') {
+                        n = true;
+                        tiles[y][x] = new Tile(x, y, tiles[y][x+3].num, false, false, x+3, y);
+                        tiles[y][x+3] = ' ';
+                    }
+
+                    if (tiles[y][x].num === tiles[y][x+2].num && tiles[y][x+1] === ' ' && tiles[y][x+2] === ' ' && tiles[y][x].x !== tiles[y][x+3].x && tiles[y][x].canMerge && tiles[y][x+3].canMerge) {
+                        n = true;
+                        tiles[y][x] = new Tile(x, y, tiles[y][x].num);
+                        tiles[y][x].canMerge = false;
+                        tiles[y][x+3] = ' ';
+                        newTiles.push({
+                            x: x,
+                            y: y,
+                            num: tiles[y][x].num+1,
+                            px: x+3,
+                            py: y
+                        });
+                    }
+                }
+                for (var x = 0; x < tiles[y].length-2; x ++) {
+                    if (tiles[y][x] === ' ' && tiles[y][x+1] === ' ' && typeof tiles[y][x+2] === 'object') {
+                        n = true;
+                        tiles[y][x] = new Tile(x, y, tiles[y][x+2].num, false, false, x+2, y);
+                        tiles[y][x+2] = ' ';
+                    }
+
+                    if (tiles[y][x].num === tiles[y][x+2].num && tiles[y][x+1] === ' ' && tiles[y][x].x !== tiles[y][x+2].x && tiles[y][x].canMerge && tiles[y][x+2].canMerge) {
+                        n = true;
+                        tiles[y][x] = new Tile(x, y, tiles[y][x].num);
+                        tiles[y][x].canMerge = false;
+                        tiles[y][x+2] = ' ';
+                        newTiles.push({
+                            x: x,
+                            y: y,
+                            num: tiles[y][x].num+1,
+                            px: x+2,
+                            py: y
+                        });
+                    }
+                }
+                for (var x = 0; x < tiles[y].length-1; x ++) {
+                    if (tiles[y][x] === ' ') {
+                        if (tiles[y][x+1] !== undefined && typeof tiles[y][x+1] === 'object') {
+                            n = true;
+                            tiles[y][x] = new Tile(x, y, tiles[y][x+1].num, false, false, x+1, y);
+                            tiles[y][x+1] = ' ';
+                        }
+                        for (var j = 0; j < newTiles.length; j ++) {
+                            if (x+1 === newTiles[j].x && y === newTiles[j].y) {
+                                n = true;
+                                newTiles[j].x = x;
+                            }
+                        }
+                    }
+
+                    if (tiles[y][x].num === tiles[y][x+1].num && tiles[y][x].x !== tiles[y][x+1].x && tiles[y][x].canMerge && tiles[y][x+1].canMerge) {
+                        n = true;
+                        tiles[y][x] = new Tile(x, y, tiles[y][x].num);
+                        tiles[y][x].canMerge = false;
+                        tiles[y][x+1] = ' ';
+                        newTiles.push({
+                            x: x,
+                            y: y,
+                            num: tiles[y][x].num+1,
+                            px: x+1,
+                            py: y
+                        });
+                    }
+                }
+            }
+        }
+    }
+    if (keys[RIGHT]) {
+        for (var i = 0; i < sz; i ++) {
+            for (var y = 0; y < tiles.length; y ++) {
+                for (var x = 3 ; x < tiles[y].length; x ++) {
+                    if (tiles[y][x] === ' ' && tiles[y][x-1] === ' ' && tiles[y][x-2] === ' ' && typeof tiles[y][x-3] === 'object') {
+                        n = true;
+                        tiles[y][x] = new Tile(x, y, tiles[y][x-3].num, false, false, x-3, y);
+                        tiles[y][x-3] = ' ';
+                    }
+                }
+                for (var x = tiles[y].length-1; x > 2; x --) {
+                    if (tiles[y][x].num === tiles[y][x-3].num && tiles[y][x-1] === ' ' && tiles[y][x-2] === ' ' && tiles[y][x].x !== tiles[y][x-3].x && tiles[y][x].canMerge && tiles[y][x-3].canMerge) {
+                        n = true;
+                        tiles[y][x] = new Tile(x, y, tiles[y][x-3].num);
+                        tiles[y][x].canMerge = false;
+                        tiles[y][x-3] = ' ';
+                        newTiles.push({
+                            x: x,
+                            y: y,
+                            num: tiles[y][x].num+1,
+                            px: x-3,
+                            py: y
+                        });
+                    }
+                }
+                for (var x = 2; x < tiles[y].length; x ++) {
+                    if (tiles[y][x] === ' ' && tiles[y][x-1] === ' ' && typeof tiles[y][x-2] === 'object') {
+                        n = true;
+                        tiles[y][x] = new Tile(x, y, tiles[y][x-2].num, false, false, x-2, y);
+                        tiles[y][x-2] = ' ';
+                    }
+                }
+                for (var x = tiles[y].length-1; x > 1; x --) {
+                    if (tiles[y][x].num === tiles[y][x-2].num && tiles[y][x-1] === ' ' && tiles[y][x].x !== tiles[y][x-2].x && tiles[y][x].canMerge && tiles[y][x-2].canMerge) {
+                        n = true;
+                        tiles[y][x] = new Tile(x, y, tiles[y][x-2].num);
+                        tiles[y][x].canMerge = false;
+                        tiles[y][x-2] = ' ';
+                        newTiles.push({
+                            x: x,
+                            y: y,
+                            num: tiles[y][x].num+1,
+                            px: x-2,
+                            py: y
+                        });
+                    }
+                }
+                for (var x = 1; x < tiles[y].length; x ++) {
+                    if (tiles[y][x] === ' ') {
+                        if (typeof tiles[y][x-1] === 'object') {
+                            n = true;
+                            tiles[y][x] = new Tile(x, y, tiles[y][x-1].num, false, false, x-1, y);
+                            tiles[y][x-1] = ' ';
+                        }
+                        for (var j = 0; j < newTiles.length; j ++) {
+                            if (x-1 === newTiles[j].x && y === newTiles[j].y) {
+                                n = true;
+                                newTiles[j].x = x;
+                            }
+                        }
+                    }
+                }
+                for (var x = tiles[y].length-1; x > 0; x --) {
+                    if (tiles[y][x].num === tiles[y][x-1].num && tiles[y][x].x !== tiles[y][x-1].x && tiles[y][x].canMerge && tiles[y][x-1].canMerge) {
+                        n = true;
+                        tiles[y][x] = new Tile(x, y, tiles[y][x-1].num);
+                        tiles[y][x].canMerge = false;
+                        tiles[y][x-1] = ' ';
+                        newTiles.push({
+                            x: x,
+                            y: y,
+                            num: tiles[y][x].num+1,
+                            px: x-1,
+                            py: y
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    // Merges tiles
+    for (var y = 0; y < tiles.length; y ++) {
+        for (var x = 0; x < tiles[y].length; x ++) {
+            for (var i = 0; i < newTiles.length; i ++) {
+                if (x === newTiles[i].x && y === newTiles[i].y) {
+                    var num = newTiles[i].num;
+                    var px = newTiles[i].px;
+                    var py = newTiles[i].py;
+                    tiles[y][x] = new Tile(x, y, num, false, true, px, py);
+                    score += pow(2, num+1);
+                }
+            }
+        }
+    }
+
+    if (n) {
+        newRandTile();
+        animTimer = 0;
+        moves ++;
+    }
+};
+
+
+// Checks if you have lost yet
+var checkLost = function() {
+    var hasLost = true;
+    if ((tiles+'').indexOf(', ') === -1 && (tiles+'').indexOf(' ,') === -1) {
+        for (var y = 0; y < tiles.length; y ++) {
+            for (var x = 0; x < tiles[y].length-1; x ++) {
+                if (tiles[y][x].num === tiles[y][x+1].num) {
+                    hasLost = false;
+                }
+            }
+        }
+        for (var y = 0; y < tiles.length-1; y ++) {
+            for (var x = 0; x < tiles[y].length; x ++) {
+                if (tiles[y][x].num === tiles[y+1][x].num) {
+                    hasLost = false;
+                }
+            }
+        }
+        if (hasLost) {
+            lost = true;
+        }
+    }
+};
+
+var gameScene = function(){
+    textAlign(CENTER, CENTER);
+    noStroke();
+    pushMatrix();
+    translate(15, 15);
+    scale(385/400);
+
+    background(0, 0, 0);
+   
+    noStroke();
+    fill(200, 184, 173);
+    for (var x = 0; x < sz; x ++) {
+        for (var y = 0; y < sz; y ++) {
+            ellipse(x*(388/sz) + (400/sz)/2, y*(400/sz) + (348/sz)/2, 400/sz - 15, 400/sz - 15);
+        }
+    }
+   
+    for (var y = 0; y < tiles.length; y ++) {
+        for (var x = 0; x < tiles[y].length; x ++) {
+            if (tiles[y][x] !== ' ') {
+                tiles[y][x].draw();
+                if (tiles[y][x].num === floor(pow(sz, 1.7)) + 2) {
+                    won = true;
+                }
+            }
+        }
+    }
+
+    popMatrix();
+   
+    if (frameCount >= 152) {
+        animTimer++;
+
+        if (won && next || !won) {
+            updateTiles();
+            checkLost();
+        }
+    }
+
+    if (won && !next) {
+        fill(colors[10], lerp(0, 150, min(animTimer/20, 1)));
+        rect(0, 0, 400, 400);
+   
+        fill(255, lerp(0, 255, min(animTimer/20, 1)));
+        textSize(50);
+        text('You won!', 130, 150);
+        textSize(30);
+        text('score: ' + (score + 2) + '\nmoves: ' + (moves + 2), 200, 230);
+   
+        fill(255, lerp(0, 220, min(animTimer/20, 1)));
+        textSize(20);
+        text('click to continue playing', 200, 366);
+   
+        if (mouseIsPressed) {
+            next = true;
+        }
+    }
+    if (lost) {
+        fill(255, 80, 70, lerp(0, 150, min(animTimer/20, 1)));
+        rect(0, 0, 400, 400);
+   
+        fill(255, lerp(0, 255, min(animTimer/20, 1)));
+        textSize(50);
+        text('You lost', 200, 180);
+        textSize(30);
+        text('Your score: ' + (score + 2) + '\nmoves: ' + (moves + 2), 200, 240);
+   
+        fill(255, lerp(0, 220, min(animTimer/20, 1)));
+        textSize(20);
+       
+    }
+};
+// Adds two tiles to start with
+newRandTile();
+newRandTile();
+
+draw = function() {
+    if (currentScene === 0){
+        startScreen();
+    } else if (currentScene === 1){
+        gameScene();
+    }
+    keys[keyCode] = false;
+};
